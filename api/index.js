@@ -1,126 +1,25 @@
 const axios = require('axios');
 const admin = require('firebase-admin');
 
-// ✅ Firebase Initialization with DEBUG
-console.log('🔄 Starting Firebase initialization...');
-console.log('🔍 Environment Check:');
-console.log('   Project ID:', process.env.FIREBASE_PROJECT_ID ? '✅ SET' : '❌ NOT SET');
-console.log('   Client Email:', process.env.FIREBASE_CLIENT_EMAIL ? '✅ SET' : '❌ NOT SET');
-console.log('   Private Key:', process.env.FIREBASE_PRIVATE_KEY ? '✅ SET' : '❌ NOT SET');
-console.log('   API Key:', process.env.API_KEY ? '✅ SET' : '❌ NOT SET');
-
+// Firebase Initialization
 try {
-  // ✅ Firebase initialization
-  const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-  };
-
-  console.log('📝 Service Account Details:');
-  console.log('   Project ID:', serviceAccount.projectId);
-  console.log('   Client Email:', serviceAccount.clientEmail);
-  console.log('   Private Key Length:', serviceAccount.privateKey?.length || 0);
-
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+    }),
     databaseURL: "https://happy-seller-3d85b-default-rtdb.firebaseio.com"
   });
-
-  console.log('✅ Firebase App initialized successfully');
-
-  // ✅ Test database connection
-  console.log('🔄 Testing database connection...');
-  const testRef = admin.database().ref('test_connection');
-  await testRef.set({ 
-    timestamp: Date.now(),
-    message: 'Test from backend API',
-    status: 'success'
-  });
-  console.log('✅ Database write test: SUCCESS');
-
-  const snapshot = await testRef.once('value');
-  console.log('✅ Database read test: SUCCESS');
-  console.log('   Test data:', snapshot.val());
-
-  // ✅ Check if users exist
-  const usersRef = admin.database().ref('users');
-  const usersSnapshot = await usersRef.once('value');
-  const usersData = usersSnapshot.val();
-  console.log('📊 Users in database:', usersData ? Object.keys(usersData).length : 0);
-  
-  if (usersData) {
-    console.log('👥 Users list:');
-    Object.keys(usersData).forEach(userId => {
-      console.log(`   - ${userId}:`, usersData[userId].email, 'OWNID:', usersData[userId].ownId);
-    });
-  }
-
+  console.log('Firebase initialized successfully');
 } catch (error) {
-  console.log('❌ Firebase initialization FAILED:');
-  console.log('   Error:', error.message);
-  console.log('   Stack:', error.stack);
+  console.log('Firebase initialization:', error.message);
 }
 
 const API_KEY = process.env.API_KEY;
 
-// ✅ Countries Database
-const countries = {
-  'india_66': { code: '66', name: 'WhatsApp Indian', country: 'India', price: 140, flag: '🇮🇳' },
-  'india_115': { code: '115', name: 'WhatsApp Indian', country: 'India', price: 103, flag: '🇮🇳' },
-  'vietnam_118': { code: '118', name: 'WhatsApp Vietnam', country: 'Vietnam', price: 61, flag: '🇻🇳' },
-  'southafrica_52': { code: '52', name: 'WhatsApp South Africa', country: 'South Africa', price: 45, flag: '🇿🇦' },
-  'colombia_53': { code: '53', name: 'WhatsApp Colombia', country: 'Colombia', price: 71, flag: '🇨🇴' },
-  'philippines_51': { code: '51', name: 'WhatsApp Philippines', country: 'Philippines', price: 52, flag: '🇵🇭' },
-  'philippines2_117': { code: '117', name: 'WhatsApp Philippines 2', country: 'Philippines', price: 64, flag: '🇵🇭' }
-};
-
-// ✅ REAL OWNID Validation with DEBUG
-async function validateOwnId(ownid) {
-  try {
-    console.log('🔍 Validating OWNID:', ownid);
-    
-    if (!ownid || ownid.length < 5) {
-      console.log('❌ OWNID too short or empty');
-      return null;
-    }
-
-    // ✅ Firebase se check karo
-    console.log('   Checking userApiKeys for:', ownid);
-    const snapshot = await admin.database().ref('userApiKeys/' + ownid).once('value');
-    const userId = snapshot.val();
-    
-    console.log('   Found userId:', userId);
-    
-    if (!userId) {
-      console.log('❌ OWNID not found in database');
-      return null;
-    }
-
-    // ✅ User data get karo
-    console.log('   Fetching user data for:', userId);
-    const userSnapshot = await admin.database().ref('users/' + userId).once('value');
-    const userData = userSnapshot.val();
-    
-    console.log('   User data found:', userData ? 'YES' : 'NO');
-    
-    if (!userData) {
-      console.log('❌ User data not found');
-      return null;
-    }
-
-    console.log('✅ OWNID validated successfully');
-    console.log('   User:', userData.email, 'Balance:', userData.wallet);
-    return { ...userData, userId: userId };
-    
-  } catch (error) {
-    console.error('❌ OWNID validation error:', error.message);
-    return null;
-  }
-}
-
 module.exports = async (req, res) => {
-  // CORS headers
+  // CORS - Allow all
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -129,132 +28,146 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  const { path, ownid, countryKey, id } = req.query;
-
-  console.log('\n📥 NEW API REQUEST ==================');
-  console.log('   Path:', path);
-  console.log('   OWNID:', ownid);
-  console.log('   Country:', countryKey);
-  console.log('   ID:', id);
+  const { path } = req.query;
+  const userAgent = req.headers['user-agent'] || '';
+  const referer = req.headers['referer'] || '';
 
   try {
-    // ✅ HEALTH CHECK
+    // ✅ PERFECT FIX: Sirf otpal.vercel.app allow, baaki sab block
+    const isDirectAccess = userAgent.includes('Mozilla') && 
+                           (!referer || !referer.includes('otpal.vercel.app'));
+
+    // If direct access, show HTML
+    if (isDirectAccess && path && path !== 'health') {
+      return res.send(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Blocked</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 10px;
+            border: 2px solid #ff4444;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 { color: #ff4444; }
+        .shayri { 
+            color: #ffaa00; 
+            font-style: italic;
+            margin: 20px 0;
+            padding: 20px;
+            background: #333;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 Access Blocked</h1>
+        <p>Are you stupid 😂 this is not api Bhai Direct Api Samajh ke ghus gaya yaar</p>
+        <div class="shayri">
+            "Log kehte hain — 'Bhai tu hamesha smile karta hai!'<br>
+            Arre naam hi Happy hai, rona toh gunah hai bhaiya! 😜"
+        </div>
+        <p>Direct API access is not allowed👍</p>
+        <p>Please use the official website:</p>
+        <a href="https://otpal.vercel.app" target="_blank" style="text-decoration: none;">
+  <button style="background-color: #00ffff; 
+                 color: black; 
+                 padding: 18px 36px; 
+                 border: none; 
+                 border-radius: 12px; 
+                 cursor: pointer; 
+                 font-size: 22px; 
+                 font-weight: bold; 
+                 box-shadow: 0 0 15px rgba(0, 255, 255, 0.6); 
+                 transition: all 0.3s ease;"
+          onmouseover="this.style.backgroundColor='#00cccc'; this.style.boxShadow='0 0 30px rgba(0, 255, 255, 0.9)'; this.style.transform='scale(1.05)';"
+          onmouseout="this.style.backgroundColor='#00ffff'; this.style.boxShadow='0 0 15px rgba(0, 255, 255, 0.6)'; this.style.transform='scale(1)';">
+    Happy Website
+  </button>
+</a>
+    </div>
+</body>
+</html>`);
+    }
+
+    // Normal API functionality
     if (path === 'health') {
-      console.log('🔧 Health check requested');
       return res.json({
         status: 'OK',
         message: 'Server is running',
         timestamp: new Date().toISOString(),
-        firebase: 'Initialized',
-        debug: {
-          project_id: process.env.FIREBASE_PROJECT_ID ? 'SET' : 'NOT_SET',
-          client_email: process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT_SET',
-          users_in_db: 'Check logs'
-        }
+        firebase: 'Connected'
       });
     }
 
-    // ✅ OWNID REQUIRED
-    if (!ownid) {
-      console.log('❌ OWNID missing');
-      return res.json({
-        success: false,
-        error: 'OWNID_REQUIRED',
-        message: 'Please provide your API key'
-      });
-    }
-
-    // ✅ REAL OWNID VALIDATION
-    console.log('🔐 Starting OWNID validation...');
-    const userData = await validateOwnId(ownid);
-    
-    if (!userData) {
-      console.log('❌ OWNID validation FAILED');
-      return res.json({
-        success: false,
-        error: 'INVALID_OWNID',
-        message: 'Invalid API key or user not found',
-        your_ownid: ownid,
-        debug_note: 'Check backend logs for details'
-      });
-    }
-
-    console.log('✅ OWNID validation SUCCESS');
-    console.log('   User:', userData.email, 'Balance:', userData.wallet);
-
-    // ✅ GET COUNTRIES
-    if (path === 'getCountries') {
-      console.log('🌍 Get countries requested');
-      return res.json({
-        success: true,
-        countries: countries,
-        balance: userData.wallet || 0,
-        email: userData.email,
-        your_ownid: ownid
-      });
-    }
-
-    // ✅ GET NUMBER
     if (path === 'getNumber') {
-      console.log('📞 Get number requested');
-      const countryKeyToUse = countryKey || 'philippines_51';
-      const countryConfig = countries[countryKeyToUse];
-      
-      if (!countryConfig) {
-        console.log('❌ Invalid country:', countryKey);
+      const url = `https://firexotp.com/stubs/handler_api.php?action=getNumber&api_key=${API_KEY}&service=wa&country=51`;
+      const response = await axios.get(url);
+      const data = response.data;
+
+      const parts = data.split(':');
+      if (parts[0] === 'ACCESS_NUMBER' && parts.length === 3) {
+        return res.json({
+          success: true,
+          id: parts[1],
+          number: parts[2]
+        });
+      } else {
         return res.json({
           success: false,
-          error: 'INVALID_COUNTRY'
+          error: data
         });
       }
+    }
 
-      const price = countryConfig.price;
-      console.log('   Country:', countryConfig.country, 'Price:', price);
-
-      // ✅ Balance check
-      if (!userData.wallet || userData.wallet < price) {
-        console.log('❌ Insufficient balance:', userData.wallet, '<', price);
-        return res.json({
-          success: false,
-          error: 'INSUFFICIENT_BALANCE',
-          message: `Required: ₹${price}, Available: ₹${userData.wallet || 0}`
-        });
+    if (path === 'getOtp') {
+      const { id } = req.query;
+      if (!id) {
+        return res.json({ success: false, error: 'ID required' });
       }
 
-      console.log('✅ Balance sufficient, proceeding...');
+      const url = `https://firexotp.com/stubs/handler_api.php?action=getStatus&api_key=${API_KEY}&id=${id}`;
+      const response = await axios.get(url);
 
-      // ✅ Temporary response (FirexOTP fix karne tak)
       return res.json({
         success: true,
-        id: "temp_" + Date.now(),
-        number: "+639123456789",
-        country: countryConfig.country,
-        service: countryConfig.name,
-        price: price,
-        balance: (userData.wallet || 0) - price,
-        email: userData.email,
-        your_ownid: ownid,
-        note: "This is a temporary response - Firebase is working!"
+        data: response.data
       });
     }
 
-    console.log('❌ Invalid path:', path);
-    return res.json({ 
-      success: false,
-      error: 'INVALID_PATH',
-      debug: {
-        your_ownid: ownid,
-        user_email: userData.email
+    if (path === 'cancelNumber') {
+      const { id } = req.query;
+      if (!id) {
+        return res.json({ success: false, error: 'ID required' });
       }
-    });
+
+      const url = `https://firexotp.com/stubs/handler_api.php?action=setStatus&api_key=${API_KEY}&id=${id}&status=8`;
+      const response = await axios.get(url);
+
+      return res.json({
+        success: true,
+        data: response.data
+      });
+    }
+
+    return res.json({ error: 'Invalid path' });
 
   } catch (error) {
-    console.error('🚨 API Error:', error.message);
-    console.error('   Stack:', error.stack);
+    console.error('Error:', error);
     return res.status(500).json({
       success: false,
-      error: 'INTERNAL_SERVER_ERROR',
-      debug_error: error.message
+      error: 'Internal server error'
     });
   }
 };
