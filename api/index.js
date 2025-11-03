@@ -119,7 +119,7 @@ module.exports = async (req, res) => {
   try {
     // ✅ PERFECT FIX: Sirf otpal.vercel.app allow, baaki sab block
     const isDirectAccess = userAgent.includes('Mozilla') && 
-                           (!referer || !referer.includes('otpal.vercel.app'));
+                           (!referer || !referer.includes('https://otpal-rho.vercel.app'));
 
     // If direct access, show HTML
     if (isDirectAccess && path && path !== 'health') {
