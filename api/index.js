@@ -17,10 +17,21 @@ try {
 }
 
 const API_KEY = process.env.API_KEY;
-const CLIENT_TOKEN = process.env.CLIENT_TOKEN; // ✅ add this in Vercel env
+const CLIENT_TOKEN = process.env.CLIENT_TOKEN; // 🔒 add this in Vercel Env
+
+// ✅ Multiple Countries Database with Prices
+const countries = {
+  'india_66': { code: '66', name: 'WhatsApp Indian', country: 'India', price: 140, flag: '🇮🇳' },
+  'india_115': { code: '115', name: 'WhatsApp Indian', country: 'India', price: 103, flag: '🇮🇳' },
+  'vietnam_118': { code: '118', name: 'WhatsApp Vietnam', country: 'Vietnam', price: 61, flag: '🇻🇳' },
+  'southafrica_52': { code: '52', name: 'WhatsApp South Africa', country: 'South Africa', price: 45, flag: '🇿🇦' },
+  'colombia_53': { code: '53', name: 'WhatsApp Colombia', country: 'Colombia', price: 71, flag: '🇨🇴' },
+  'philippines_51': { code: '51', name: 'WhatsApp Philippines', country: 'Philippines', price: 52, flag: '🇵🇭' },
+  'philippines2_117': { code: '117', name: 'WhatsApp Philippines 2', country: 'Philippines', price: 64, flag: '🇵🇭' }
+};
 
 module.exports = async (req, res) => {
-  // Basic CORS
+  // ✅ Basic CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -37,7 +48,7 @@ module.exports = async (req, res) => {
   const authHeader = (req.headers['authorization'] || '').trim();
 
   try {
-    // ✅ STEP 1: Browser-origin check (frontend unchanged)
+    // ✅ Step 1: Browser / frontend check
     const isBrowser =
       userAgent.includes('Mozilla') &&
       (referer.includes('otpal.vercel.app') ||
@@ -45,10 +56,9 @@ module.exports = async (req, res) => {
         secFetchSite === 'same-origin' ||
         secFetchSite === 'same-site');
 
-    // ✅ STEP 2: Non-browser (tool/bot) → require CLIENT_TOKEN
+    // ✅ Step 2: Non-browser requests (e.g. Canary, curl, Postman)
     if (!isBrowser) {
       if (!authHeader || authHeader !== `Bearer ${CLIENT_TOKEN}`) {
-        // agar koi tool use kar raha hai bina key ke — block karo
         res.setHeader('Connection', 'close');
         return res.status(401).send(`<!DOCTYPE html>
 <html>
@@ -56,24 +66,35 @@ module.exports = async (req, res) => {
 <body style="background:#111;color:#fff;text-align:center;padding:50px">
   <h1>🚫 Unauthorized Access</h1>
   <p>This endpoint is protected. Direct API access not allowed.</p>
+  <p>Please use the official site 👉 <a href="https://otpal.vercel.app" style="color:#0ff">otpal.vercel.app</a></p>
 </body>
 </html>`);
       }
     }
 
-    // ✅ STEP 3: Health route
+    // ✅ Step 3: Normal API functionality
     if (path === 'health') {
       return res.json({
         status: 'OK',
         message: 'Server is running',
         timestamp: new Date().toISOString(),
-        firebase: 'Connected'
+        firebase: 'Connected',
+        countries: Object.keys(countries).length
       });
     }
 
-    // ✅ STEP 4: Normal API logic (unchanged)
     if (path === 'getNumber') {
-      const url = `https://firexotp.com/stubs/handler_api.php?action=getNumber&api_key=${API_KEY}&service=wa&country=51`;
+      const { countryKey = 'philippines_51' } = req.query;
+      const countryConfig = countries[countryKey];
+
+      if (!countryConfig) {
+        return res.json({
+          success: false,
+          error: 'Invalid country selection'
+        });
+      }
+
+      const url = `https://firexotp.com/stubs/handler_api.php?action=getNumber&api_key=${API_KEY}&service=wa&country=${countryConfig.code}`;
       const response = await axios.get(url);
       const data = response.data;
 
@@ -82,7 +103,10 @@ module.exports = async (req, res) => {
         return res.json({
           success: true,
           id: parts[1],
-          number: parts[2]
+          number: parts[2],
+          country: countryConfig.country,
+          service: countryConfig.name,
+          price: countryConfig.price
         });
       } else {
         return res.json({
@@ -90,6 +114,13 @@ module.exports = async (req, res) => {
           error: data
         });
       }
+    }
+
+    if (path === 'getCountries') {
+      return res.json({
+        success: true,
+        countries
+      });
     }
 
     if (path === 'getOtp') {
