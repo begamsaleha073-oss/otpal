@@ -29,7 +29,7 @@ const countries = {
   'philippines_51': { code: '51', name: 'WhatsApp Philippines', country: 'Philippines', price: 52, flag: '🇵🇭' },
   'philippines2_117': { code: '117', name: 'WhatsApp Philippines 2', country: 'Philippines', price: 64, flag: '🇵🇭' },
   // ✅ Indonesia Add करें
-  'indonesia_54': { code: '54', name: 'WhatsApp Indonesia', country: 'Indonesia', price: 55, flag: '🇮🇩' }
+  'indonesia_54': { code: '54', name: 'WhatsApp Indonesia', country: 'Indonesia', price: 49, flag: '🇮🇩' }
 };
 
 module.exports = async (req, res) => {
